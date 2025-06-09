@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Image ↔ Visual Code</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; display: none; }
+    canvas { border: 1px solid #ccc; margin-top: 10px; }
+    #output-img { margin-top: 10px; max-width: 300px; display: block; }
+    #menu { position: absolute; top: 10px; right: 10px; cursor: pointer; font-size: 24px; }
+    #menu-options { display: none; position: absolute; right: 10px; background: #fff; border: 1px solid #ccc; padding: 10px; }
+    #menu-options button { display: block; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div id="menu">⋮</div>
+  <div id="menu-options"></div>
+
+  <h2>🔄 Image to Custom Visual Code</h2>
+  <input type="file" id="img-input"><br>
+  <canvas id="qr-canvas"></canvas><br>
+  <button onclick="downloadCanvas()">⬇ Download Code as PNG</button>
+
+  <hr>
+  <h2>🔍 Visual Code to Image</h2>
+  <input type="file" id="code-input"><br>
+  <canvas id="decode-canvas"></canvas><br>
+  <img id="output-img" alt="Recovered Image"/>
+  <br>
+  <button id="download-img-btn" style="display:none;">⬇ Download Decoded Image</button>
+
+  <script>
+    let accessKey = localStorage.getItem("accessKey") || "229225";
+    let masterKey = localStorage.getItem("masterKey") || "vsiness229@gmail.com54321";
+
+    function promptKey(message = "Enter Access Key:") {
+      const key = prompt(message);
+      return key === accessKey;
+    }
+
+    // Initial Access Prompt
+    if (promptKey("Only V can access this website. Please enter the key:")) {
+      document.body.style.display = 'block';
+    } else {
+      alert("❌ Wrong key. Access denied.");
+      document.body.innerHTML = "";
+      throw new Error("Access Denied");
+    }
+
+    // Menu Click
+    document.getElementById("menu").onclick = () => {
+      const entered = prompt("Enter Master Key:");
+      if (entered !== masterKey) {
+        alert("❌ Wrong master key.");
+        return;
+      }
+
+      const menu = document.getElementById("menu-options");
+      menu.innerHTML = `
+        <button onclick="changeAccessKey()">Change Access Key</button>
+        <button onclick="changeMasterKey()">Change Master Key</button>
+      `;
+      menu.style.display = "block";
+    };
+
+    function changeAccessKey() {
+      const entered = prompt("Enter Master Key:");
+      if (entered === masterKey) {
+        const newKey = prompt("Enter New Access Key (min 4 chars):");
+        if (newKey && newKey.length >= 4) {
+          localStorage.setItem("accessKey", newKey);
+          accessKey = newKey;
+          alert("✅ Access Key updated. Please reload the page.");
+        } else {
+          alert("❌ Invalid Access Key.");
+        }
+      } else {
+        alert("❌ Wrong master key.");
+      }
+    }
+
+    function changeMasterKey() {
+      const entered = prompt("Enter Current Master Key:");
+      if (entered === masterKey) {
+        const newKey = prompt("Enter New Master Key (min 6 chars):");
+        if (newKey && newKey.length >= 6) {
+          localStorage.setItem("masterKey", newKey);
+          masterKey = newKey;
+          alert("✅ Master Key updated. Please reload the page.");
+        } else {
+          alert("❌ Invalid Master Key.");
+        }
+      } else {
+        alert("❌ Wrong master key.");
+      }
+    }
+
+    // Image to Code
+    const qrCanvas = document.getElementById('qr-canvas');
+    const ctx = qrCanvas.getContext('2d');
+
+    document.getElementById('img-input').addEventListener('change', (e) => {
+      if (!promptKey("Enter access key to encode image:")) {
+        alert("❌ Wrong key.");
+        return;
+      }
+
+      const file = e.target.files[0];
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        const arrayBuffer = reader.result;
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const binaryStr = Array.from(uint8Array).map(b => b.toString(2).padStart(8, '0')).join('');
+        const size = Math.ceil(Math.sqrt(binaryStr.length));
+        qrCanvas.width = size;
+        qrCanvas.height = size;
+        const imageData = ctx.createImageData(size, size);
+
+        for (let i = 0; i < size * size; i++) {
+          const bit = binaryStr[i] === '1' ? 0 : 255;
+          imageData.data.set([bit, bit, bit, 255], i * 4);
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+
+    function downloadCanvas() {
+      const link = document.createElement('a');
+      link.download = 'custom_code.png';
+      link.href = qrCanvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Code to Image
+    const decodeCanvas = document.getElementById('decode-canvas');
+    const decodeCtx = decodeCanvas.getContext('2d');
+    const outputImg = document.getElementById('output-img');
+    const downloadDecodedBtn = document.getElementById('download-img-btn');
+
+    document.getElementById('code-input').addEventListener('change', (e) => {
+      if (!promptKey("Enter access key to decode code:")) {
+        alert("❌ Wrong key.");
+        return;
+      }
+
+      const file = e.target.files[0];
+      const img = new Image();
+
+      img.onload = () => {
+        decodeCanvas.width = img.width;
+        decodeCanvas.height = img.height;
+        decodeCtx.drawImage(img, 0, 0);
+        const imageData = decodeCtx.getImageData(0, 0, img.width, img.height);
+        let binaryStr = '';
+
+        for (let i = 0; i < imageData.data.length; i += 4) {
+          const val = imageData.data[i] < 128 ? '1' : '0';
+          binaryStr += val;
+        }
+
+        const bytes = [];
+        for (let i = 0; i < binaryStr.length; i += 8) {
+          const byte = binaryStr.slice(i, i + 8);
+          if (byte.length === 8) bytes.push(parseInt(byte, 2));
+        }
+
+        const blob = new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' });
+        const url = URL.createObjectURL(blob);
+        outputImg.src = url;
+        downloadDecodedBtn.style.display = 'inline-block';
+        downloadDecodedBtn.onclick = () => {
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = "decoded_image.jpg";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        };
+      };
+
+      img.src = URL.createObjectURL(file);
+    });
+  </script>
+</body>
+</html>
